@@ -1,13 +1,14 @@
-import { useEffect } from "react";
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import React, { useEffect } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
+import { useFetcher, useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 import {
   Page,
   Card,
   IndexTable,
   Text,
   Badge,
+  Button,
   EmptyState,
   BlockStack,
   useIndexResourceState,
@@ -28,17 +29,66 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return json({ coupons });
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = formData.get("_action") as string;
+
+  if (intent === "bulkDelete") {
+    const ids = formData.getAll("ids").map(Number).filter((n) => !isNaN(n));
+    if (ids.length > 0) {
+      await db.coupon.deleteMany({
+        where: { id: { in: ids }, shop: session.shop },
+      });
+    }
+    return json({ deleted: ids.length });
+  }
+
+  return json({ error: "Unknown action" }, { status: 400 });
+};
+
+function ToggleCell({ couponId, isActive }: { couponId: number; isActive: boolean }) {
+  const fetcher = useFetcher();
+  const optimisticActive = fetcher.formData
+    ? !isActive
+    : isActive;
+
+  return (
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div onClick={(e) => e.stopPropagation()}>
+      <fetcher.Form method="post" action={`/app/coupons/${couponId}`}>
+        <input type="hidden" name="_action" value="toggle" />
+        <Button
+          size="slim"
+          submit
+          loading={fetcher.state !== "idle"}
+        >
+          {optimisticActive ? "Deactivate" : "Activate"}
+        </Button>
+      </fetcher.Form>
+    </div>
+  );
+}
+
 export default function CouponsIndex() {
   const { coupons } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const shopify = useAppBridge();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Show toast when redirected after creating a coupon
+  // Show toast when redirected after creating/updating/deleting a coupon
   useEffect(() => {
-    if (searchParams.get("created") === "1") {
-      shopify.toast.show("Coupon created successfully");
-      setSearchParams({}, { replace: true });
+    const toasts: Record<string, string> = {
+      created: "Coupon created successfully",
+      updated: "Coupon updated successfully",
+      deleted: "Coupon deleted successfully",
+    };
+    for (const [param, message] of Object.entries(toasts)) {
+      if (searchParams.get(param) === "1") {
+        shopify.toast.show(message);
+        setSearchParams({}, { replace: true });
+        break;
+      }
     }
   }, [searchParams, shopify, setSearchParams]);
 
@@ -47,6 +97,20 @@ export default function CouponsIndex() {
     useIndexResourceState(
       coupons.map((c) => ({ ...c, id: String(c.id) })),
     );
+
+  const bulkDeleteFetcher = useFetcher();
+
+  const promotedBulkActions = [
+    {
+      content: "Delete coupons",
+      onAction: () => {
+        const formData = new FormData();
+        formData.set("_action", "bulkDelete");
+        selectedResources.forEach((id) => formData.append("ids", id));
+        bulkDeleteFetcher.submit(formData, { method: "post" });
+      },
+    },
+  ];
 
   if (coupons.length === 0) {
     return (
@@ -82,6 +146,7 @@ export default function CouponsIndex() {
       key={coupon.id}
       selected={selectedResources.includes(String(coupon.id))}
       position={index}
+      onClick={() => navigate(`/app/coupons/${coupon.id}`)}
     >
       <IndexTable.Cell>
         <Text variant="bodyMd" fontWeight="bold" as="span">
@@ -98,6 +163,9 @@ export default function CouponsIndex() {
       </IndexTable.Cell>
       <IndexTable.Cell>
         {new Date(coupon.createdAt).toLocaleDateString()}
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <ToggleCell couponId={coupon.id} isActive={coupon.isActive} />
       </IndexTable.Cell>
     </IndexTable.Row>
   ));
@@ -118,6 +186,7 @@ export default function CouponsIndex() {
               allResourcesSelected ? "All" : selectedResources.length
             }
             onSelectionChange={handleSelectionChange}
+            promotedBulkActions={promotedBulkActions}
             headings={[
               { title: "Code" },
               { title: "Title" },
@@ -125,6 +194,7 @@ export default function CouponsIndex() {
               { title: "Status" },
               { title: "Usage" },
               { title: "Created" },
+              { title: "Actions" },
             ]}
           >
             {rowMarkup}

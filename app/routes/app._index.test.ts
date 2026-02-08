@@ -5,7 +5,7 @@ import { authenticate as mockAuthenticate } from "../../test/mocks/shopify.serve
 vi.mock("../db.server", () => ({ default: mockDb }));
 vi.mock("../shopify.server", () => ({ authenticate: mockAuthenticate }));
 
-const { loader } = await import("./app._index");
+const { loader, action } = await import("./app._index");
 
 describe("app._index loader", () => {
   beforeEach(() => {
@@ -49,5 +49,67 @@ describe("app._index loader", () => {
     const data = await response.json();
 
     expect(data.coupons).toEqual(fakeCoupons);
+  });
+});
+
+describe("action - bulkDelete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuthenticate.admin.mockResolvedValue({
+      session: { shop: "test-shop.myshopify.com" },
+      admin: { graphql: vi.fn() },
+    });
+  });
+
+  it("deletes selected coupons scoped by shop", async () => {
+    mockDb.coupon.deleteMany.mockResolvedValue({ count: 2 });
+
+    const formData = new FormData();
+    formData.set("_action", "bulkDelete");
+    formData.append("ids", "1");
+    formData.append("ids", "2");
+
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      body: formData,
+    });
+    const response = await action({ request, params: {}, context: {} });
+    const data = await response.json() as { deleted: number };
+
+    expect(data.deleted).toBe(2);
+    expect(mockDb.coupon.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [1, 2] },
+        shop: "test-shop.myshopify.com",
+      },
+    });
+  });
+
+  it("handles empty selection gracefully", async () => {
+    const formData = new FormData();
+    formData.set("_action", "bulkDelete");
+
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      body: formData,
+    });
+    const response = await action({ request, params: {}, context: {} });
+    const data = await response.json() as { deleted: number };
+
+    expect(data.deleted).toBe(0);
+    expect(mockDb.coupon.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("returns error for unknown action", async () => {
+    const formData = new FormData();
+    formData.set("_action", "unknown");
+
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      body: formData,
+    });
+    const response = await action({ request, params: {}, context: {} });
+
+    expect(response.status).toBe(400);
   });
 });

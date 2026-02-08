@@ -1,24 +1,12 @@
-import { useState, useCallback } from "react";
 import { json, redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { Form, useActionData, useNavigation } from "@remix-run/react";
-import {
-  Page,
-  Layout,
-  Card,
-  FormLayout,
-  TextField,
-  Select,
-  Button,
-  Banner,
-  BlockStack,
-  InlineStack,
-  Text,
-} from "@shopify/polaris";
+import { useActionData, useNavigation } from "@remix-run/react";
+import { Page, Layout } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { validateCouponForm } from "../utils/coupon-validation";
 import type { CouponFormData, ValidationErrors } from "../utils/coupon-validation";
+import { CouponForm } from "../components/CouponForm";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -74,27 +62,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     throw error;
   }
 
-  return redirect("/app");
+  return redirect("/app?created=1");
 };
 
 export default function NewCouponPage() {
   const actionData = useActionData<{ errors?: ValidationErrors }>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
-
-  const [title, setTitle] = useState("");
-  const [code, setCode] = useState("");
-  const [discountType, setDiscountType] = useState("percentage");
-  const [discountValue, setDiscountValue] = useState("");
-  const [minimumPurchase, setMinimumPurchase] = useState("");
-  const [usageLimit, setUsageLimit] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
-
-  const handleDiscountTypeChange = useCallback(
-    (value: string) => setDiscountType(value),
-    [],
-  );
 
   return (
     <Page
@@ -103,142 +77,11 @@ export default function NewCouponPage() {
     >
       <Layout>
         <Layout.Section>
-          <Form method="post">
-            <BlockStack gap="400">
-              {actionData?.errors && Object.keys(actionData.errors).length > 0 && (
-                <Banner tone="critical">
-                  <p>There were errors with your submission. Please correct them below.</p>
-                </Banner>
-              )}
-
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingSm">
-                    Coupon details
-                  </Text>
-                  <FormLayout>
-                    <TextField
-                      label="Title"
-                      name="title"
-                      value={title}
-                      onChange={setTitle}
-                      autoComplete="off"
-                      helpText="Internal name for this coupon"
-                      error={actionData?.errors?.title}
-                    />
-                    <TextField
-                      label="Coupon code"
-                      name="code"
-                      value={code}
-                      onChange={setCode}
-                      autoComplete="off"
-                      helpText="Customers enter this code at checkout (auto-uppercased)"
-                      error={actionData?.errors?.code}
-                    />
-                  </FormLayout>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingSm">
-                    Discount value
-                  </Text>
-                  <FormLayout>
-                    <FormLayout.Group>
-                      <Select
-                        label="Discount type"
-                        name="discountType"
-                        value={discountType}
-                        onChange={handleDiscountTypeChange}
-                        options={[
-                          { label: "Percentage", value: "percentage" },
-                          { label: "Fixed amount", value: "fixed_amount" },
-                        ]}
-                        error={actionData?.errors?.discountType}
-                      />
-                      <TextField
-                        label="Value"
-                        name="discountValue"
-                        value={discountValue}
-                        onChange={setDiscountValue}
-                        type="number"
-                        autoComplete="off"
-                        error={actionData?.errors?.discountValue}
-                      />
-                    </FormLayout.Group>
-                    <TextField
-                      label="Minimum purchase amount"
-                      name="minimumPurchase"
-                      value={minimumPurchase}
-                      onChange={setMinimumPurchase}
-                      type="number"
-                      autoComplete="off"
-                      helpText="Leave empty for no minimum"
-                      error={actionData?.errors?.minimumPurchase}
-                    />
-                  </FormLayout>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingSm">
-                    Usage limits
-                  </Text>
-                  <FormLayout>
-                    <TextField
-                      label="Usage limit"
-                      name="usageLimit"
-                      value={usageLimit}
-                      onChange={setUsageLimit}
-                      type="number"
-                      autoComplete="off"
-                      helpText="Leave empty for unlimited usage"
-                      error={actionData?.errors?.usageLimit}
-                    />
-                  </FormLayout>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="400">
-                  <Text as="h2" variant="headingSm">
-                    Active dates
-                  </Text>
-                  <FormLayout>
-                    <FormLayout.Group>
-                      <TextField
-                        label="Start date"
-                        name="startsAt"
-                        value={startsAt}
-                        onChange={setStartsAt}
-                        type="date"
-                        autoComplete="off"
-                        error={actionData?.errors?.startsAt}
-                      />
-                      <TextField
-                        label="End date"
-                        name="endsAt"
-                        value={endsAt}
-                        onChange={setEndsAt}
-                        type="date"
-                        autoComplete="off"
-                        helpText="Leave empty for no end date"
-                        error={actionData?.errors?.endsAt}
-                      />
-                    </FormLayout.Group>
-                  </FormLayout>
-                </BlockStack>
-              </Card>
-
-              <InlineStack align="end">
-                <Button submit variant="primary" loading={isSubmitting}>
-                  Create coupon
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </Form>
+          <CouponForm
+            errors={actionData?.errors}
+            isSubmitting={isSubmitting}
+            submitLabel="Create coupon"
+          />
         </Layout.Section>
       </Layout>
     </Page>
