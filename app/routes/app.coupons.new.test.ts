@@ -56,7 +56,7 @@ describe("app.coupons.new action", () => {
     const response = await action({ request, params: {}, context: {} });
 
     expect(response.status).toBe(422);
-    const data = await response.json();
+    const data = await response.json() as { errors: Record<string, string> };
     expect(data.errors.title).toBeDefined();
   });
 

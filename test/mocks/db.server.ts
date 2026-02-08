@@ -6,6 +6,9 @@ const mockDb = {
     create: vi.fn(),
     findFirst: vi.fn(),
     count: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
   },
 };
 
