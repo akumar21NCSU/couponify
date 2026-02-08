@@ -18,6 +18,7 @@ describe("app._index loader", () => {
 
   it("calls authenticate.admin with the request", async () => {
     mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
 
     const request = new Request("http://localhost/app");
     await loader({ request, params: {}, context: {} });
@@ -27,6 +28,7 @@ describe("app._index loader", () => {
 
   it("returns coupons scoped to the authenticated shop", async () => {
     mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
 
     const request = new Request("http://localhost/app");
     await loader({ request, params: {}, context: {} });
@@ -34,6 +36,8 @@ describe("app._index loader", () => {
     expect(mockDb.coupon.findMany).toHaveBeenCalledWith({
       where: { shop: "test-shop.myshopify.com" },
       orderBy: { createdAt: "desc" },
+      skip: 0,
+      take: 10,
     });
   });
 
@@ -43,12 +47,149 @@ describe("app._index loader", () => {
       { id: 2, title: "Another Coupon", code: "SAVE20" },
     ];
     mockDb.coupon.findMany.mockResolvedValue(fakeCoupons);
+    mockDb.coupon.count.mockResolvedValue(2);
 
     const request = new Request("http://localhost/app");
     const response = await loader({ request, params: {}, context: {} });
     const data = await response.json();
 
     expect(data.coupons).toEqual(fakeCoupons);
+    expect(data.totalCount).toBe(2);
+    expect(data.page).toBe(1);
+  });
+
+  it("passes search param to query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?search=TEST");
+    const response = await loader({ request, params: {}, context: {} });
+    const data = await response.json();
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          { shop: "test-shop.myshopify.com" },
+          { OR: [{ code: { contains: "TEST" } }, { title: { contains: "TEST" } }] },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      skip: 0,
+      take: 10,
+    });
+    expect(data.search).toBe("TEST");
+  });
+
+  it("passes status filter to query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?status=inactive");
+    await loader({ request, params: {}, context: {} });
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { shop: "test-shop.myshopify.com" },
+            { isActive: false },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("passes discountType filter to query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?discountType=percentage");
+    await loader({ request, params: {}, context: {} });
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { shop: "test-shop.myshopify.com" },
+            { discountType: { in: ["percentage"] } },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("passes sort param to query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?sort=code&direction=asc");
+    await loader({ request, params: {}, context: {} });
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: { code: "asc" },
+      }),
+    );
+  });
+
+  it("passes page param to query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?page=2");
+    const response = await loader({ request, params: {}, context: {} });
+    const data = await response.json();
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skip: 10,
+        take: 10,
+      }),
+    );
+    expect(data.page).toBe(2);
+  });
+
+  it("returns totalCount from count query", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(25);
+
+    const request = new Request("http://localhost/app");
+    const response = await loader({ request, params: {}, context: {} });
+    const data = await response.json();
+
+    expect(data.totalCount).toBe(25);
+  });
+
+  it("defaults invalid page to 1", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request("http://localhost/app?page=-1");
+    await loader({ request, params: {}, context: {} });
+
+    expect(mockDb.coupon.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skip: 0,
+      }),
+    );
+  });
+
+  it("returns filter state in response", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([]);
+    mockDb.coupon.count.mockResolvedValue(0);
+
+    const request = new Request(
+      "http://localhost/app?search=test&status=active&discountType=percentage&sort=code&direction=asc&page=2",
+    );
+    const response = await loader({ request, params: {}, context: {} });
+    const data = await response.json();
+
+    expect(data.search).toBe("test");
+    expect(data.status).toEqual(["active"]);
+    expect(data.discountType).toEqual(["percentage"]);
+    expect(data.sort).toBe("code");
+    expect(data.direction).toBe("asc");
+    expect(data.page).toBe(2);
   });
 });
 
