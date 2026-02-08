@@ -32,3 +32,36 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model Coupon {
+  id                 Int            @id @default(autoincrement())
+  shop               String
+  title              String
+  code               String
+  discountType       String
+  discountValue      Float
+  minimumPurchase    Float?
+  usageLimit         Int?
+  usageCount         Int            @default(0)
+  appliesToAll       Boolean        @default(true)
+  startsAt           DateTime
+  endsAt             DateTime?
+  isActive           Boolean        @default(true)
+  shopifyDiscountId  String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  usages CouponUsage[]
+
+  @@unique([shop, code])
+}
+
+model CouponUsage {
+  id         Int      @id @default(autoincrement())
+  couponId   Int
+  orderId    String?
+  customerId String?
+  usedAt     DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+}
