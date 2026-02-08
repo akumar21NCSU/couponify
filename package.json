@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "remix vite:build",
-    "dev": "shopify app dev",
+    "dev": "npx tsx prisma/seed.ts && shopify app dev",
+    "seed": "npx tsx prisma/seed.ts",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
     "deploy": "shopify app deploy",
