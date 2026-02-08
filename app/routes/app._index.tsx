@@ -22,6 +22,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { formatDiscount, getCouponStatus } from "../utils/format-discount";
 import { parseCouponListParams, buildCouponListQuery } from "../utils/coupon-list-query";
+import { deleteShopifyDiscount } from "../utils/shopify-discount.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -49,13 +50,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = formData.get("_action") as string;
 
   if (intent === "bulkDelete") {
     const ids = formData.getAll("ids").map(Number).filter((n) => !isNaN(n));
     if (ids.length > 0) {
+      // Find coupons with Shopify discount IDs
+      const couponsToDelete = await db.coupon.findMany({
+        where: { id: { in: ids }, shop: session.shop },
+        select: { shopifyDiscountId: true },
+      });
+
+      // Best-effort delete from Shopify
+      for (const c of couponsToDelete) {
+        if (c.shopifyDiscountId) {
+          try {
+            await deleteShopifyDiscount(admin, c.shopifyDiscountId);
+          } catch (error) {
+            console.error("Failed to delete Shopify discount:", error);
+          }
+        }
+      }
+
       await db.coupon.deleteMany({
         where: { id: { in: ids }, shop: session.shop },
       });
@@ -102,6 +120,7 @@ export default function CouponsIndex() {
       created: "Coupon created successfully",
       updated: "Coupon updated successfully",
       deleted: "Coupon deleted successfully",
+      syncError: "Coupon saved locally but failed to sync with Shopify",
     };
     for (const [param, message] of Object.entries(toasts)) {
       if (searchParams.get(param) === "1") {

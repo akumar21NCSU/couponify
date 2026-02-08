@@ -1,0 +1,16 @@
+api_version = "2025-01"
+
+[[extensions]]
+name = "Coupon Discount"
+handle = "coupon-discount"
+type = "function"
+description = "Applies coupon discounts (percentage or fixed amount) at checkout"
+
+  [[extensions.targeting]]
+  target = "purchase.product-discount.run"
+  input_query = "src/run.graphql"
+  export = "run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"

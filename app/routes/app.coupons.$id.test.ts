@@ -5,6 +5,18 @@ import { authenticate as mockAuthenticate } from "../../test/mocks/shopify.serve
 vi.mock("../db.server", () => ({ default: mockDb }));
 vi.mock("../shopify.server", () => ({ authenticate: mockAuthenticate }));
 
+const mockUpdateShopifyDiscount = vi.fn().mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+const mockDeleteShopifyDiscount = vi.fn().mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+const mockActivateShopifyDiscount = vi.fn().mockResolvedValue({ userErrors: [] });
+const mockDeactivateShopifyDiscount = vi.fn().mockResolvedValue({ userErrors: [] });
+
+vi.mock("../utils/shopify-discount.server", () => ({
+  updateShopifyDiscount: (...args: unknown[]) => mockUpdateShopifyDiscount(...args),
+  deleteShopifyDiscount: (...args: unknown[]) => mockDeleteShopifyDiscount(...args),
+  activateShopifyDiscount: (...args: unknown[]) => mockActivateShopifyDiscount(...args),
+  deactivateShopifyDiscount: (...args: unknown[]) => mockDeactivateShopifyDiscount(...args),
+}));
+
 const { loader, action } = await import("./app.coupons.$id");
 
 function buildFormData(data: Record<string, string>): FormData {
@@ -26,6 +38,7 @@ const existingCoupon = {
   usageLimit: null,
   usageCount: 0,
   isActive: true,
+  shopifyDiscountId: "gid://shopify/DiscountCodeApp/1",
   startsAt: "2025-01-01T00:00:00.000Z",
   endsAt: null,
   createdAt: "2025-01-01T00:00:00.000Z",
@@ -51,6 +64,10 @@ describe("loader", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockUpdateShopifyDiscount.mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockDeleteShopifyDiscount.mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockActivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
+    mockDeactivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
   });
 
   it("returns coupon data for valid id and shop", async () => {
@@ -122,6 +139,10 @@ describe("action - update", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockUpdateShopifyDiscount.mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockDeleteShopifyDiscount.mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockActivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
+    mockDeactivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
   });
 
   it("updates coupon with valid data and redirects", async () => {
@@ -203,6 +224,39 @@ describe("action - update", () => {
       expect((error as Response).status).toBe(404);
     }
   });
+
+  it("calls updateShopifyDiscount when shopifyDiscountId exists", async () => {
+    mockDb.coupon.findFirst.mockResolvedValue(existingCoupon);
+    mockDb.coupon.update.mockResolvedValue({ id: 1 });
+
+    const request = new Request("http://localhost/app/coupons/1", {
+      method: "POST",
+      body: buildFormData(validFormData),
+    });
+    await action({ request, params: { id: "1" }, context: {} });
+
+    expect(mockUpdateShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/1",
+      expect.objectContaining({
+        title: "Updated Coupon",
+        code: "UPDATED10",
+      }),
+    );
+  });
+
+  it("skips Shopify update when shopifyDiscountId is null", async () => {
+    mockDb.coupon.findFirst.mockResolvedValue({ ...existingCoupon, shopifyDiscountId: null });
+    mockDb.coupon.update.mockResolvedValue({ id: 1 });
+
+    const request = new Request("http://localhost/app/coupons/1", {
+      method: "POST",
+      body: buildFormData(validFormData),
+    });
+    await action({ request, params: { id: "1" }, context: {} });
+
+    expect(mockUpdateShopifyDiscount).not.toHaveBeenCalled();
+  });
 });
 
 describe("action - delete", () => {
@@ -212,6 +266,10 @@ describe("action - delete", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockUpdateShopifyDiscount.mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockDeleteShopifyDiscount.mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockActivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
+    mockDeactivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
   });
 
   it("deletes coupon and redirects", async () => {
@@ -267,6 +325,22 @@ describe("action - delete", () => {
       }),
     );
   });
+
+  it("calls deleteShopifyDiscount before DB delete", async () => {
+    mockDb.coupon.findFirst.mockResolvedValue(existingCoupon);
+    mockDb.coupon.delete.mockResolvedValue(existingCoupon);
+
+    const request = new Request("http://localhost/app/coupons/1", {
+      method: "POST",
+      body: buildFormData({ _action: "delete" }),
+    });
+    await action({ request, params: { id: "1" }, context: {} });
+
+    expect(mockDeleteShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/1",
+    );
+  });
 });
 
 describe("action - toggle", () => {
@@ -276,6 +350,10 @@ describe("action - toggle", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockUpdateShopifyDiscount.mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockDeleteShopifyDiscount.mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+    mockActivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
+    mockDeactivateShopifyDiscount.mockResolvedValue({ userErrors: [] });
   });
 
   it("toggles isActive from true to false", async () => {
@@ -351,5 +429,37 @@ describe("action - toggle", () => {
       expect(error).toBeInstanceOf(Response);
       expect((error as Response).status).toBe(404);
     }
+  });
+
+  it("calls deactivateShopifyDiscount when toggling active to inactive", async () => {
+    mockDb.coupon.findFirst.mockResolvedValue({ ...existingCoupon, isActive: true });
+    mockDb.coupon.update.mockResolvedValue({ ...existingCoupon, isActive: false });
+
+    const request = new Request("http://localhost/app/coupons/1", {
+      method: "POST",
+      body: buildFormData({ _action: "toggle" }),
+    });
+    await action({ request, params: { id: "1" }, context: {} });
+
+    expect(mockDeactivateShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/1",
+    );
+  });
+
+  it("calls activateShopifyDiscount when toggling inactive to active", async () => {
+    mockDb.coupon.findFirst.mockResolvedValue({ ...existingCoupon, isActive: false });
+    mockDb.coupon.update.mockResolvedValue({ ...existingCoupon, isActive: true });
+
+    const request = new Request("http://localhost/app/coupons/1", {
+      method: "POST",
+      body: buildFormData({ _action: "toggle" }),
+    });
+    await action({ request, params: { id: "1" }, context: {} });
+
+    expect(mockActivateShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/1",
+    );
   });
 });

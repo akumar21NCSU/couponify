@@ -1,0 +1,14 @@
+{
+  "name": "coupon-discount",
+  "version": "0.0.1",
+  "license": "UNLICENSED",
+  "scripts": {
+    "shopify": "npx shopify",
+    "typegen": "npx shopify app function typegen",
+    "build": "npx shopify app function build",
+    "preview": "npx shopify app function run"
+  },
+  "dependencies": {
+    "@shopify/shopify_function": "^1.0.0"
+  }
+}

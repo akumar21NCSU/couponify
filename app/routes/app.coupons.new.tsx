@@ -7,6 +7,7 @@ import db from "../db.server";
 import { validateCouponForm } from "../utils/coupon-validation";
 import type { CouponFormData, ValidationErrors } from "../utils/coupon-validation";
 import { CouponForm } from "../components/CouponForm";
+import { getFunctionId, createShopifyDiscount } from "../utils/shopify-discount.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -14,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
 
   const formData = await request.formData();
   const raw: CouponFormData = {
@@ -34,8 +35,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ errors: result.errors }, { status: 422 });
   }
 
+  let coupon: { id: number };
   try {
-    await db.coupon.create({
+    coupon = await db.coupon.create({
       data: {
         shop: session.shop,
         title: result.data.title,
@@ -60,6 +62,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
     throw error;
+  }
+
+  // Sync to Shopify (best-effort)
+  try {
+    const functionId = await getFunctionId(admin);
+    const shopifyResult = await createShopifyDiscount(admin, functionId, {
+      title: result.data.title,
+      code: result.data.code,
+      discountType: result.data.discountType,
+      discountValue: result.data.discountValue,
+      minimumPurchase: result.data.minimumPurchase,
+      usageLimit: result.data.usageLimit,
+      startsAt: result.data.startsAt,
+      endsAt: result.data.endsAt,
+    });
+
+    if (shopifyResult.userErrors.length === 0 && shopifyResult.id) {
+      await db.coupon.update({
+        where: { id: coupon.id },
+        data: { shopifyDiscountId: shopifyResult.id },
+      });
+    }
+  } catch (error) {
+    console.error("Failed to sync discount to Shopify:", error);
   }
 
   return redirect("/app?created=1");
