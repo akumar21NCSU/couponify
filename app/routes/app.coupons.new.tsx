@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { json, redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
@@ -81,6 +82,20 @@ export default function NewCouponPage() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
+  const [title, setTitle] = useState("");
+  const [code, setCode] = useState("");
+  const [discountType, setDiscountType] = useState("percentage");
+  const [discountValue, setDiscountValue] = useState("");
+  const [minimumPurchase, setMinimumPurchase] = useState("");
+  const [usageLimit, setUsageLimit] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+
+  const handleDiscountTypeChange = useCallback(
+    (value: string) => setDiscountType(value),
+    [],
+  );
+
   return (
     <Page
       backAction={{ content: "Coupons", url: "/app" }}
@@ -105,6 +120,8 @@ export default function NewCouponPage() {
                     <TextField
                       label="Title"
                       name="title"
+                      value={title}
+                      onChange={setTitle}
                       autoComplete="off"
                       helpText="Internal name for this coupon"
                       error={actionData?.errors?.title}
@@ -112,6 +129,8 @@ export default function NewCouponPage() {
                     <TextField
                       label="Coupon code"
                       name="code"
+                      value={code}
+                      onChange={setCode}
                       autoComplete="off"
                       helpText="Customers enter this code at checkout (auto-uppercased)"
                       error={actionData?.errors?.code}
@@ -130,6 +149,8 @@ export default function NewCouponPage() {
                       <Select
                         label="Discount type"
                         name="discountType"
+                        value={discountType}
+                        onChange={handleDiscountTypeChange}
                         options={[
                           { label: "Percentage", value: "percentage" },
                           { label: "Fixed amount", value: "fixed_amount" },
@@ -139,6 +160,8 @@ export default function NewCouponPage() {
                       <TextField
                         label="Value"
                         name="discountValue"
+                        value={discountValue}
+                        onChange={setDiscountValue}
                         type="number"
                         autoComplete="off"
                         error={actionData?.errors?.discountValue}
@@ -147,6 +170,8 @@ export default function NewCouponPage() {
                     <TextField
                       label="Minimum purchase amount"
                       name="minimumPurchase"
+                      value={minimumPurchase}
+                      onChange={setMinimumPurchase}
                       type="number"
                       autoComplete="off"
                       helpText="Leave empty for no minimum"
@@ -165,6 +190,8 @@ export default function NewCouponPage() {
                     <TextField
                       label="Usage limit"
                       name="usageLimit"
+                      value={usageLimit}
+                      onChange={setUsageLimit}
                       type="number"
                       autoComplete="off"
                       helpText="Leave empty for unlimited usage"
@@ -184,6 +211,8 @@ export default function NewCouponPage() {
                       <TextField
                         label="Start date"
                         name="startsAt"
+                        value={startsAt}
+                        onChange={setStartsAt}
                         type="date"
                         autoComplete="off"
                         error={actionData?.errors?.startsAt}
@@ -191,6 +220,8 @@ export default function NewCouponPage() {
                       <TextField
                         label="End date"
                         name="endsAt"
+                        value={endsAt}
+                        onChange={setEndsAt}
                         type="date"
                         autoComplete="off"
                         helpText="Leave empty for no end date"
