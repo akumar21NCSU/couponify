@@ -1,8 +1,9 @@
-api_version = "2025-01"
+api_version = "2025-04"
 
 [[extensions]]
 name = "Coupon Discount"
 handle = "coupon-discount"
+uid = "ace70ae9-5701-d720-6d2b-6982cbda1c75dba60603"
 type = "function"
 description = "Applies coupon discounts (percentage or fixed amount) at checkout"
 
@@ -12,5 +13,5 @@ description = "Applies coupon discounts (percentage or fixed amount) at checkout
   export = "run"
 
   [extensions.build]
-  command = ""
+  command = "sh build.sh"
   path = "dist/function.wasm"

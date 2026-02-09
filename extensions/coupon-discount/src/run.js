@@ -19,7 +19,7 @@ const EMPTY_DISCOUNT = {
  * @param {RunInput} input - The function input from Shopify
  * @returns {FunctionRunResult} The discount to apply
  */
-export function run(input) {
+export default function run(input) {
   const config = JSON.parse(
     input?.discountNode?.metafield?.value ?? "{}"
   );
