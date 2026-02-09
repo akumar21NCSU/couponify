@@ -5,6 +5,12 @@ import { authenticate as mockAuthenticate } from "../../test/mocks/shopify.serve
 vi.mock("../db.server", () => ({ default: mockDb }));
 vi.mock("../shopify.server", () => ({ authenticate: mockAuthenticate }));
 
+const mockDeleteShopifyDiscount = vi.fn().mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+
+vi.mock("../utils/shopify-discount.server", () => ({
+  deleteShopifyDiscount: (...args: unknown[]) => mockDeleteShopifyDiscount(...args),
+}));
+
 const { loader, action } = await import("./app._index");
 
 describe("app._index loader", () => {
@@ -200,9 +206,14 @@ describe("action - bulkDelete", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockDeleteShopifyDiscount.mockResolvedValue({ deletedId: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
   });
 
   it("deletes selected coupons scoped by shop", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([
+      { shopifyDiscountId: "gid://shopify/DiscountCodeApp/1" },
+      { shopifyDiscountId: null },
+    ]);
     mockDb.coupon.deleteMany.mockResolvedValue({ count: 2 });
 
     const formData = new FormData();
@@ -252,5 +263,55 @@ describe("action - bulkDelete", () => {
     const response = await action({ request, params: {}, context: {} });
 
     expect(response.status).toBe(400);
+  });
+
+  it("deletes Shopify discounts before bulk DB delete", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([
+      { shopifyDiscountId: "gid://shopify/DiscountCodeApp/1" },
+      { shopifyDiscountId: "gid://shopify/DiscountCodeApp/2" },
+    ]);
+    mockDb.coupon.deleteMany.mockResolvedValue({ count: 2 });
+
+    const formData = new FormData();
+    formData.set("_action", "bulkDelete");
+    formData.append("ids", "1");
+    formData.append("ids", "2");
+
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      body: formData,
+    });
+    await action({ request, params: {}, context: {} });
+
+    expect(mockDeleteShopifyDiscount).toHaveBeenCalledTimes(2);
+    expect(mockDeleteShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/1",
+    );
+    expect(mockDeleteShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/DiscountCodeApp/2",
+    );
+  });
+
+  it("skips Shopify delete for coupons without shopifyDiscountId", async () => {
+    mockDb.coupon.findMany.mockResolvedValue([
+      { shopifyDiscountId: null },
+      { shopifyDiscountId: null },
+    ]);
+    mockDb.coupon.deleteMany.mockResolvedValue({ count: 2 });
+
+    const formData = new FormData();
+    formData.set("_action", "bulkDelete");
+    formData.append("ids", "1");
+    formData.append("ids", "2");
+
+    const request = new Request("http://localhost/app", {
+      method: "POST",
+      body: formData,
+    });
+    await action({ request, params: {}, context: {} });
+
+    expect(mockDeleteShopifyDiscount).not.toHaveBeenCalled();
   });
 });

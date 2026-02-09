@@ -5,6 +5,14 @@ import { authenticate as mockAuthenticate } from "../../test/mocks/shopify.serve
 vi.mock("../db.server", () => ({ default: mockDb }));
 vi.mock("../shopify.server", () => ({ authenticate: mockAuthenticate }));
 
+const mockGetFunctionId = vi.fn().mockResolvedValue("gid://shopify/ShopifyFunction/1");
+const mockCreateShopifyDiscount = vi.fn().mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
+
+vi.mock("../utils/shopify-discount.server", () => ({
+  getFunctionId: (...args: unknown[]) => mockGetFunctionId(...args),
+  createShopifyDiscount: (...args: unknown[]) => mockCreateShopifyDiscount(...args),
+}));
+
 const { action } = await import("./app.coupons.new");
 
 function buildFormData(data: Record<string, string>): FormData {
@@ -33,10 +41,13 @@ describe("app.coupons.new action", () => {
       session: { shop: "test-shop.myshopify.com" },
       admin: { graphql: vi.fn() },
     });
+    mockGetFunctionId.mockResolvedValue("gid://shopify/ShopifyFunction/1");
+    mockCreateShopifyDiscount.mockResolvedValue({ id: "gid://shopify/DiscountCodeApp/1", userErrors: [] });
   });
 
   it("creates a coupon with valid data and redirects", async () => {
     mockDb.coupon.create.mockResolvedValue({ id: 1 });
+    mockDb.coupon.update.mockResolvedValue({ id: 1 });
 
     const request = new Request("http://localhost/app/coupons/new", {
       method: "POST",
@@ -77,6 +88,7 @@ describe("app.coupons.new action", () => {
 
   it("scopes the coupon to the authenticated shop", async () => {
     mockDb.coupon.create.mockResolvedValue({ id: 1 });
+    mockDb.coupon.update.mockResolvedValue({ id: 1 });
 
     const request = new Request("http://localhost/app/coupons/new", {
       method: "POST",
@@ -91,5 +103,57 @@ describe("app.coupons.new action", () => {
         }),
       }),
     );
+  });
+
+  it("calls createShopifyDiscount after DB create", async () => {
+    mockDb.coupon.create.mockResolvedValue({ id: 1 });
+    mockDb.coupon.update.mockResolvedValue({ id: 1 });
+
+    const request = new Request("http://localhost/app/coupons/new", {
+      method: "POST",
+      body: buildFormData(validFormFields),
+    });
+    await action({ request, params: {}, context: {} });
+
+    expect(mockCreateShopifyDiscount).toHaveBeenCalledWith(
+      expect.anything(),
+      "gid://shopify/ShopifyFunction/1",
+      expect.objectContaining({
+        title: "Test Coupon",
+        code: "TEST10",
+        discountType: "percentage",
+        discountValue: 10,
+      }),
+    );
+  });
+
+  it("updates local record with shopifyDiscountId on success", async () => {
+    mockDb.coupon.create.mockResolvedValue({ id: 42 });
+    mockDb.coupon.update.mockResolvedValue({ id: 42 });
+
+    const request = new Request("http://localhost/app/coupons/new", {
+      method: "POST",
+      body: buildFormData(validFormFields),
+    });
+    await action({ request, params: {}, context: {} });
+
+    expect(mockDb.coupon.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { shopifyDiscountId: "gid://shopify/DiscountCodeApp/1" },
+    });
+  });
+
+  it("still creates local coupon if Shopify sync fails", async () => {
+    mockDb.coupon.create.mockResolvedValue({ id: 1 });
+    mockGetFunctionId.mockRejectedValue(new Error("Extension not deployed"));
+
+    const request = new Request("http://localhost/app/coupons/new", {
+      method: "POST",
+      body: buildFormData(validFormFields),
+    });
+    const response = await action({ request, params: {}, context: {} });
+
+    expect(response.status).toBe(302);
+    expect(mockDb.coupon.create).toHaveBeenCalled();
   });
 });

@@ -9,5 +9,5 @@ module.exports = {
   globals: {
     shopify: "readonly",
   },
-  ignorePatterns: ["**/*.test.ts", "**/*.test.tsx", "test/"],
+  ignorePatterns: ["**/*.test.ts", "**/*.test.tsx", "test/", "extensions/**/dist/"],
 };

@@ -8,6 +8,12 @@ import db from "../db.server";
 import { validateCouponForm } from "../utils/coupon-validation";
 import type { CouponFormData, ValidationErrors } from "../utils/coupon-validation";
 import { CouponForm } from "../components/CouponForm";
+import {
+  updateShopifyDiscount,
+  deleteShopifyDiscount,
+  activateShopifyDiscount,
+  deactivateShopifyDiscount,
+} from "../utils/shopify-discount.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -29,7 +35,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const id = Number(params.id);
 
   if (isNaN(id)) {
@@ -49,15 +55,36 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 
   // Branch on intent
   if (intent === "delete") {
+    if (existing.shopifyDiscountId) {
+      try {
+        await deleteShopifyDiscount(admin, existing.shopifyDiscountId);
+      } catch (error) {
+        console.error("Failed to delete Shopify discount:", error);
+      }
+    }
     await db.coupon.delete({ where: { id } });
     return redirect("/app?deleted=1");
   }
 
   if (intent === "toggle") {
+    const newIsActive = !existing.isActive;
     await db.coupon.update({
       where: { id },
-      data: { isActive: !existing.isActive },
+      data: { isActive: newIsActive },
     });
+
+    if (existing.shopifyDiscountId) {
+      try {
+        if (newIsActive) {
+          await activateShopifyDiscount(admin, existing.shopifyDiscountId);
+        } else {
+          await deactivateShopifyDiscount(admin, existing.shopifyDiscountId);
+        }
+      } catch (error) {
+        console.error("Failed to sync toggle to Shopify:", error);
+      }
+    }
+
     return json({ success: true });
   }
 
@@ -104,6 +131,23 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       );
     }
     throw error;
+  }
+
+  if (existing.shopifyDiscountId) {
+    try {
+      await updateShopifyDiscount(admin, existing.shopifyDiscountId, {
+        title: result.data.title,
+        code: result.data.code,
+        discountType: result.data.discountType,
+        discountValue: result.data.discountValue,
+        minimumPurchase: result.data.minimumPurchase,
+        usageLimit: result.data.usageLimit,
+        startsAt: result.data.startsAt,
+        endsAt: result.data.endsAt,
+      });
+    } catch (error) {
+      console.error("Failed to sync discount update to Shopify:", error);
+    }
   }
 
   return redirect("/app?updated=1");
